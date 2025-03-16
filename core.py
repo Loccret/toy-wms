@@ -3,13 +3,19 @@ import pandas as pd
 import os
 from datetime import datetime
 from PIL import Image
+import shutil  # Needed for copying files
 
 # -------------------------------
-# Setup: Data Directory & CSV Files
+# Setup: Data Directory, Log Folder & CSV Files
 # -------------------------------
 DATA_DIR = "./data"
 if not os.path.exists(DATA_DIR):
     os.makedirs(DATA_DIR)
+
+# Create log folder if it does not exist.
+LOG_DIR = os.path.join(DATA_DIR, "log")
+if not os.path.exists(LOG_DIR):
+    os.makedirs(LOG_DIR)
 
 TRANSACTION_CSV = os.path.join(DATA_DIR, "transaction_records.csv")
 INVENTORY_CSV = os.path.join(DATA_DIR, "warehouse_inventory.csv")
@@ -27,6 +33,23 @@ if os.path.exists(INVENTORY_CSV):
 else:
     df_inventory = pd.DataFrame(columns=["最后改变时间", "物品", "在库数量"])
     df_inventory.to_csv(INVENTORY_CSV, index=False)
+
+# -------------------------------
+# Logging Function
+# -------------------------------
+def log_files():
+    """
+    Copies the current transaction and inventory CSV files into the log folder,
+    naming them with a timestamp prefix in the format YYYYMMDDHHMMSS.
+    """
+    log_folder = os.path.join(DATA_DIR, "log")
+    if not os.path.exists(log_folder):
+        os.makedirs(log_folder)
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    if os.path.exists(TRANSACTION_CSV):
+        shutil.copy(TRANSACTION_CSV, os.path.join(log_folder, f"{timestamp}-transaction_records.csv"))
+    if os.path.exists(INVENTORY_CSV):
+        shutil.copy(INVENTORY_CSV, os.path.join(log_folder, f"{timestamp}-warehouse_inventory.csv"))
 
 # -------------------------------
 # Utility Functions for Saving
@@ -85,9 +108,14 @@ def process_image(file_obj):
 
 def add_inbound(item, sender_receiver, operator, remarks, quantity, image):
     """
-    Records an inbound (入库) transaction, updates the transaction records and inventory.
+    Records an inbound (入库) transaction.
+    Before updating, logs the current CSV files.
+    Updates the transaction records and inventory.
     """
     global df_transactions
+    # Log current CSV files before changes
+    log_files()
+    
     now = datetime.now()
     transaction_type = "入库"
     quantity = int(quantity)
@@ -111,9 +139,14 @@ def add_inbound(item, sender_receiver, operator, remarks, quantity, image):
 
 def add_outbound(item, sender_receiver, operator, remarks, quantity, image):
     """
-    Records an outbound (出库) transaction, validates inventory and updates records.
+    Records an outbound (出库) transaction.
+    Before updating, logs the current CSV files.
+    Validates inventory and updates records.
     """
     global df_transactions
+    # Log current CSV files before changes
+    log_files()
+    
     now = datetime.now()
     transaction_type = "出库"
     quantity = int(quantity)
@@ -142,14 +175,12 @@ def load_transactions_file(file_obj):
     global df_transactions
     dest = TRANSACTION_CSV
     if file_obj is None:
-        # If no file is provided, try to load the existing CSV file.
         if os.path.exists(dest):
             df_transactions = pd.read_csv(dest, parse_dates=["日期"])
             return "出入库记录已加载。"
         else:
             return "未上传文件且交易记录文件不存在。"
     else:
-        # Process the provided file object.
         if hasattr(file_obj, "read"):
             data = file_obj.read()
         else:
@@ -164,14 +195,12 @@ def load_inventory_file(file_obj):
     global df_inventory
     dest = INVENTORY_CSV
     if file_obj is None:
-        # If no file is provided, try to load the existing CSV file.
         if os.path.exists(dest):
             df_inventory = pd.read_csv(dest, parse_dates=["最后改变时间"])
             return "仓库库存已加载。"
         else:
             return "未上传文件且仓库文件不存在。"
     else:
-        # Process the provided file object.
         if hasattr(file_obj, "read"):
             data = file_obj.read()
         else:
@@ -181,6 +210,7 @@ def load_inventory_file(file_obj):
             f.write(data)
         df_inventory = pd.read_csv(dest, parse_dates=["最后改变时间"])
         return "仓库库存已加载。"
+
 # -------------------------------
 # Filtering & Refresh Functions
 # -------------------------------
