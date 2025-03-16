@@ -140,35 +140,47 @@ def add_outbound(item, sender_receiver, operator, remarks, quantity, image):
 # -------------------------------
 def load_transactions_file(file_obj):
     global df_transactions
-    if file_obj is None:
-        return "未上传文件。"
     dest = TRANSACTION_CSV
-    # Check if file_obj has a read method or is a file path string.
-    if hasattr(file_obj, "read"):
-        data = file_obj.read()
+    if file_obj is None:
+        # If no file is provided, try to load the existing CSV file.
+        if os.path.exists(dest):
+            df_transactions = pd.read_csv(dest, parse_dates=["日期"])
+            return "出入库记录已加载。"
+        else:
+            return "未上传文件且交易记录文件不存在。"
     else:
-        with open(file_obj, "rb") as f:
-            data = f.read()
-    with open(dest, "wb") as f:
-        f.write(data)
-    df_transactions = pd.read_csv(dest, parse_dates=["日期"])
-    return "出入库记录已加载。"
+        # Process the provided file object.
+        if hasattr(file_obj, "read"):
+            data = file_obj.read()
+        else:
+            with open(file_obj, "rb") as f:
+                data = f.read()
+        with open(dest, "wb") as f:
+            f.write(data)
+        df_transactions = pd.read_csv(dest, parse_dates=["日期"])
+        return "出入库记录已加载。"
 
 def load_inventory_file(file_obj):
     global df_inventory
-    if file_obj is None:
-        return "未上传文件。"
     dest = INVENTORY_CSV
-    if hasattr(file_obj, "read"):
-        data = file_obj.read()
+    if file_obj is None:
+        # If no file is provided, try to load the existing CSV file.
+        if os.path.exists(dest):
+            df_inventory = pd.read_csv(dest, parse_dates=["最后改变时间"])
+            return "仓库库存已加载。"
+        else:
+            return "未上传文件且仓库文件不存在。"
     else:
-        with open(file_obj, "rb") as f:
-            data = f.read()
-    with open(dest, "wb") as f:
-        f.write(data)
-    df_inventory = pd.read_csv(dest, parse_dates=["最后改变时间"])
-    return "仓库库存已加载。"
-
+        # Process the provided file object.
+        if hasattr(file_obj, "read"):
+            data = file_obj.read()
+        else:
+            with open(file_obj, "rb") as f:
+                data = f.read()
+        with open(dest, "wb") as f:
+            f.write(data)
+        df_inventory = pd.read_csv(dest, parse_dates=["最后改变时间"])
+        return "仓库库存已加载。"
 # -------------------------------
 # Filtering & Refresh Functions
 # -------------------------------
