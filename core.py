@@ -3,7 +3,6 @@ import pandas as pd
 import os
 from datetime import datetime
 from PIL import Image
-import shutil
 
 # -------------------------------
 # Setup: Data Directory & CSV Files
@@ -62,7 +61,6 @@ def update_inventory(item, transaction_type, quantity):
         df_inventory.loc[idx, "最后改变时间"] = now
     else:
         if transaction_type == "入库":
-            # 新增物品
             new_row = {"最后改变时间": now, "物品": item, "在库数量": quantity}
             df_inventory = pd.concat([df_inventory, pd.DataFrame([new_row])], ignore_index=True)
         else:
@@ -138,25 +136,14 @@ def add_outbound(item, sender_receiver, operator, remarks, quantity, image):
     return "出库交易记录成功。"
 
 # -------------------------------
-# CSV File Import & Export Functions
+# CSV File Import Functions
 # -------------------------------
-# def load_transactions_file(file_obj):
-#     global df_transactions
-#     if file_obj is None:
-#         return "未上传文件。"
-#     dest = TRANSACTION_CSV
-#     with open(dest, "wb") as f:
-#         f.write(file_obj.read())
-#     df_transactions = pd.read_csv(dest, parse_dates=["日期"])
-#     return "出入库记录已加载。"
-
-
 def load_transactions_file(file_obj):
     global df_transactions
     if file_obj is None:
         return "未上传文件。"
     dest = TRANSACTION_CSV
-    # Check if file_obj has a read method (file-like) or is already a path string.
+    # Check if file_obj has a read method or is a file path string.
     if hasattr(file_obj, "read"):
         data = file_obj.read()
     else:
@@ -166,18 +153,6 @@ def load_transactions_file(file_obj):
         f.write(data)
     df_transactions = pd.read_csv(dest, parse_dates=["日期"])
     return "出入库记录已加载。"
-
-
-# def load_inventory_file(file_obj):
-#     global df_inventory
-#     if file_obj is None:
-#         return "未上传文件。"
-#     dest = INVENTORY_CSV
-#     with open(dest, "wb") as f:
-#         f.write(file_obj.read())
-#     df_inventory = pd.read_csv(dest, parse_dates=["最后改变时间"])
-#     return "仓库库存已加载。"
-
 
 def load_inventory_file(file_obj):
     global df_inventory
@@ -194,17 +169,8 @@ def load_inventory_file(file_obj):
     df_inventory = pd.read_csv(dest, parse_dates=["最后改变时间"])
     return "仓库库存已加载。"
 
-
-def export_transactions():
-    """Returns the transaction CSV file for download."""
-    return TRANSACTION_CSV
-
-def export_inventory():
-    """Returns the inventory CSV file for download."""
-    return INVENTORY_CSV
-
 # -------------------------------
-# Filtering Function
+# Filtering & Refresh Functions
 # -------------------------------
 def filter_dataframe(df, keyword):
     if keyword.strip() == "":
@@ -254,18 +220,13 @@ with gr.Blocks() as demo:
                     btn_outbound = gr.Button("记录出库")
                     outbound_result = gr.Textbox(label="出库结果", interactive=False)
         with gr.Column():
-            gr.Markdown("### CSV 导入/导出")
+            gr.Markdown("### CSV 导入")
             trans_file = gr.File(label="拖拽上传 出入库记录 CSV", file_types=[".csv"])
             inv_file = gr.File(label="拖拽上传 仓库 CSV", file_types=[".csv"])
             btn_load_trans = gr.Button("读取出入库记录")
             btn_load_inv = gr.Button("读取仓库")
             load_trans_result = gr.Textbox(label="读取出入库记录结果", interactive=False)
             load_inv_result = gr.Textbox(label="读取仓库结果", interactive=False)
-            gr.Markdown("CSV 导出")
-            btn_export_trans = gr.Button("导出出入库记录")
-            btn_export_inv = gr.Button("导出仓库")
-            export_trans_file = gr.File(label="出入库记录 CSV", interactive=False)
-            export_inv_file = gr.File(label="仓库 CSV", interactive=False)
     
     with gr.Tabs():
         with gr.TabItem("出入库记录 (Transaction Records)"):
@@ -290,9 +251,6 @@ with gr.Blocks() as demo:
     
     btn_load_trans.click(fn=load_transactions_file, inputs=trans_file, outputs=load_trans_result)
     btn_load_inv.click(fn=load_inventory_file, inputs=inv_file, outputs=load_inv_result)
-    
-    btn_export_trans.click(fn=export_transactions, outputs=export_trans_file)
-    btn_export_inv.click(fn=export_inventory, outputs=export_inv_file)
     
     keyword_trans.change(fn=update_transactions_display, inputs=keyword_trans, outputs=df_trans_display)
     keyword_inv.change(fn=update_inventory_display, inputs=keyword_inv, outputs=df_inv_display)
