@@ -20,11 +20,14 @@ if not os.path.exists(LOG_DIR):
 TRANSACTION_CSV = os.path.join(DATA_DIR, "transaction_records.csv")
 INVENTORY_CSV = os.path.join(DATA_DIR, "warehouse_inventory.csv")
 
-# Initialize or load the Transaction Records DataFrame
+# Initialize or load the Transaction Records DataFrame with the new "数量" column
 if os.path.exists(TRANSACTION_CSV):
     df_transactions = pd.read_csv(TRANSACTION_CSV, parse_dates=["日期"])
+    # In case the CSV doesn't have the new column, add it at position of 3.
+    if "数量" not in df_transactions.columns:
+        df_transactions.insert(3, "数量", None)
 else:
-    df_transactions = pd.DataFrame(columns=["日期", "出入库", "物品", "发送方(接收方)", "经办人", "备注"])
+    df_transactions = pd.DataFrame(columns=["日期", "出入库", "物品", "数量", "发送方(接收方)", "经办人", "备注"])
     df_transactions.to_csv(TRANSACTION_CSV, index=False)
 
 # Initialize or load the Warehouse Inventory DataFrame
@@ -133,14 +136,14 @@ def add_inbound(item, sender_receiver, operator, remarks, quantity, image):
         "日期": now,
         "出入库": transaction_type,
         "物品": item,
+        "数量": quantity,
         "发送方(接收方)": sender_receiver,
         "经办人": operator,
-        "备注": remarks,
+        "备注": remarks
     }
     success, msg = update_inventory(item, transaction_type, quantity)
     if not success:
         return msg
-    # Simply concatenate the new record
     df_transactions = pd.concat([df_transactions, pd.DataFrame([record])], ignore_index=True)
     save_transactions()
     return "入库交易记录成功。"
@@ -169,6 +172,7 @@ def add_outbound(item, sender_receiver, operator, remarks, quantity, image):
         "日期": now,
         "出入库": transaction_type,
         "物品": item,
+        "数量": quantity,
         "发送方(接收方)": sender_receiver,
         "经办人": operator,
         "备注": remarks,
