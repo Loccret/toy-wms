@@ -3,7 +3,7 @@ import pandas as pd
 import os
 from datetime import datetime
 from PIL import Image
-import shutil  # Needed for copying files
+import shutil  # For copying files
 
 # -------------------------------
 # Setup: Data Directory, Log Folder & CSV Files
@@ -33,6 +33,12 @@ if os.path.exists(INVENTORY_CSV):
 else:
     df_inventory = pd.DataFrame(columns=["最后改变时间", "物品", "在库数量"])
     df_inventory.to_csv(INVENTORY_CSV, index=False)
+
+# -------------------------------
+# Undo/Redo Stacks
+# -------------------------------
+undo_stack = []
+redo_stack = []
 
 # -------------------------------
 # Logging Function
@@ -109,12 +115,13 @@ def process_image(file_obj):
 def add_inbound(item, sender_receiver, operator, remarks, quantity, image):
     """
     Records an inbound (入库) transaction.
-    Before updating, logs the current CSV files.
-    Updates the transaction records and inventory.
+    Logs the current CSVs, saves the current state for undo, clears redo history,
+    then updates the transaction records and inventory.
     """
-    global df_transactions
-    # Log current CSV files before changes
-    log_files()
+    global df_transactions, undo_stack, redo_stack
+    log_files()  # Log current CSV files
+    undo_stack.append((df_transactions.copy(), df_inventory.copy()))
+    redo_stack.clear()
     
     now = datetime.now()
     transaction_type = "入库"
@@ -133,6 +140,7 @@ def add_inbound(item, sender_receiver, operator, remarks, quantity, image):
     success, msg = update_inventory(item, transaction_type, quantity)
     if not success:
         return msg
+    # Simply concatenate the new record
     df_transactions = pd.concat([df_transactions, pd.DataFrame([record])], ignore_index=True)
     save_transactions()
     return "入库交易记录成功。"
@@ -140,12 +148,13 @@ def add_inbound(item, sender_receiver, operator, remarks, quantity, image):
 def add_outbound(item, sender_receiver, operator, remarks, quantity, image):
     """
     Records an outbound (出库) transaction.
-    Before updating, logs the current CSV files.
-    Validates inventory and updates records.
+    Logs the current CSVs, saves the current state for undo, clears redo history,
+    validates inventory and updates records.
     """
-    global df_transactions
-    # Log current CSV files before changes
-    log_files()
+    global df_transactions, undo_stack, redo_stack
+    log_files()  # Log current CSV files
+    undo_stack.append((df_transactions.copy(), df_inventory.copy()))
+    redo_stack.clear()
     
     now = datetime.now()
     transaction_type = "出库"
@@ -167,6 +176,39 @@ def add_outbound(item, sender_receiver, operator, remarks, quantity, image):
     df_transactions = pd.concat([df_transactions, pd.DataFrame([record])], ignore_index=True)
     save_transactions()
     return "出库交易记录成功。"
+
+# -------------------------------
+# Undo/Redo Functions
+# -------------------------------
+def undo_action():
+    """
+    Reverts to the previous state from the undo stack.
+    The current state is pushed to the redo stack.
+    """
+    global df_transactions, df_inventory, undo_stack, redo_stack
+    if not undo_stack:
+        return "无法撤销操作，没有历史记录。", df_transactions
+    redo_stack.append((df_transactions.copy(), df_inventory.copy()))
+    state = undo_stack.pop()
+    df_transactions, df_inventory = state
+    save_transactions()
+    save_inventory()
+    return "撤销成功。", df_transactions
+
+def redo_action():
+    """
+    Reapplies a state from the redo stack.
+    The current state is pushed to the undo stack.
+    """
+    global df_transactions, df_inventory, undo_stack, redo_stack
+    if not redo_stack:
+        return "无法重做操作，没有重做记录。", df_transactions
+    undo_stack.append((df_transactions.copy(), df_inventory.copy()))
+    state = redo_stack.pop()
+    df_transactions, df_inventory = state
+    save_transactions()
+    save_inventory()
+    return "重做成功。", df_transactions
 
 # -------------------------------
 # CSV File Import Functions
@@ -272,6 +314,10 @@ with gr.Blocks() as demo:
     
     with gr.Tabs():
         with gr.TabItem("出入库记录 (Transaction Records)"):
+            with gr.Row():
+                undo_btn = gr.Button("撤销")
+                redo_btn = gr.Button("重做")
+            undo_msg = gr.Textbox(label="操作信息", interactive=False)
             keyword_trans = gr.Textbox(label="关键词过滤")
             df_trans_display = gr.Dataframe(value=df_transactions, interactive=True, label="出入库记录")
             btn_refresh_trans = gr.Button("刷新记录表")
@@ -293,6 +339,9 @@ with gr.Blocks() as demo:
     
     btn_load_trans.click(fn=load_transactions_file, inputs=trans_file, outputs=load_trans_result)
     btn_load_inv.click(fn=load_inventory_file, inputs=inv_file, outputs=load_inv_result)
+    
+    undo_btn.click(fn=undo_action, outputs=[undo_msg, df_trans_display])
+    redo_btn.click(fn=redo_action, outputs=[undo_msg, df_trans_display])
     
     keyword_trans.change(fn=update_transactions_display, inputs=keyword_trans, outputs=df_trans_display)
     keyword_inv.change(fn=update_inventory_display, inputs=keyword_inv, outputs=df_inv_display)
